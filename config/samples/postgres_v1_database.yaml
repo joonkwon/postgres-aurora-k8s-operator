@@ -1,0 +1,12 @@
+apiVersion: postgres.aurora.operator.k8s/v1
+kind: Database
+metadata:
+  labels:
+    app.kubernetes.io/name: database
+    app.kubernetes.io/instance: database-sample
+    app.kubernetes.io/part-of: postgres-db-user
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/created-by: postgres-db-user
+  name: database-sample
+spec:
+  # TODO(user): Add fields here

@@ -1,0 +1,32 @@
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: manager-role
+rules:
+- apiGroups:
+  - postgres.aurora.operator.k8s
+  resources:
+  - databases
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - postgres.aurora.operator.k8s
+  resources:
+  - databases/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - postgres.aurora.operator.k8s
+  resources:
+  - databases/status
+  verbs:
+  - get
+  - patch
+  - update
