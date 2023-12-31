@@ -42,8 +42,8 @@ const (
 // DatabaseReconciler reconciles a Database object
 type DatabaseReconciler struct {
 	client.Client
-	Scheme  *runtime.Scheme
-	Posgres *services.PostgresService
+	Scheme   *runtime.Scheme
+	Postgres *services.PostgresService
 }
 
 //+kubebuilder:rbac:groups=postgres.aurora.operator.k8s,resources=databases,verbs=get;list;watch;create;update;patch;delete
@@ -164,7 +164,7 @@ func (r *DatabaseReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	// create database and ignore database already exists error
 	// the database name is `<namespace>_<name>`
 	dbname := fmt.Sprintf("%s_%s", database.Namespace, database.Name)
-	err := r.Posgres.CreateDB(dbname)
+	err := r.Postgres.CreateDB(dbname)
 	if err != nil && !services.AlreadyExist(err) {
 		log.Error(err, "Failed to create database", "databasename", dbname)
 		return ctrl.Result{}, err
@@ -178,15 +178,18 @@ func (r *DatabaseReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	}
 
 	// create app_rw and app_ro roles
-	// and Grant neccessary permissions for the database
+	// and grant neccessary permissions for the database
+	// this operations are idempotent
 
-	roleRW, err := r.Posgres.CreateRWRole(dbname)
+	roleRW, err := r.Postgres.CreateRWRole(dbname)
 	if err != nil {
 		log.Error(err, "Failed to create RW role for app")
+		return ctrl.Result{}, err
 	}
-	roleRO, err := r.Posgres.CreateRORole(dbname)
+	roleRO, err := r.Postgres.CreateRORole(dbname)
 	if err != nil {
 		log.Error(err, "Failed to create RO role for app")
+		return ctrl.Result{}, err
 	}
 	database.Status.AppRoleRW = roleRW
 	database.Status.AppRoleRO = roleRO
@@ -195,14 +198,16 @@ func (r *DatabaseReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		return ctrl.Result{}, err
 	}
 
-	// if the database exists,
-	//    	create app_rw and app_ro roles and set the permissiosn for them on the database (idempotent operation)
-	//  	set default privileges for app_rw and admin_user (idempotent operation)
-
-	// if the database does not exist,
-	//   	create the database
-	//    	create app_rw and app_ro roles and set the permissiosn for them on the database (idempotent operation)
-	//  	set default privileges for app_rw and admin_user (idempotent operation)
+	// Configure Default Privileges (see https://www.postgresql.org/docs/12/sql-alterdefaultprivileges.html)
+	if err := r.Postgres.ConfigureDefaultPrivileges(dbname, roleRW, roleRO); err != nil {
+		log.Error(err, "Failed to configure Default Previleges")
+		return ctrl.Result{}, err
+	}
+	database.Status.DefaultPrivConfigured = true
+	if err := r.Status().Update(ctx, database); err != nil {
+		log.Error(err, "Failed to update Default Privilege Configuration Satus", "databasename", dbname)
+		return ctrl.Result{}, err
+	}
 
 	return ctrl.Result{}, nil
 }
