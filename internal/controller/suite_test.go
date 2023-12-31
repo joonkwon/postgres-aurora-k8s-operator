@@ -137,9 +137,9 @@ var _ = BeforeSuite(func() {
 	Expect(err).ToNot(HaveOccurred(), "creating rds_iam role")
 
 	err = (&DatabaseReconciler{
-		Client:  k8sManager.GetClient(),
-		Scheme:  k8sManager.GetScheme(),
-		Posgres: &postgres,
+		Client:   k8sManager.GetClient(),
+		Scheme:   k8sManager.GetScheme(),
+		Postgres: &postgres,
 	}).SetupWithManager(k8sManager)
 	Expect(err).ToNot(HaveOccurred())
 

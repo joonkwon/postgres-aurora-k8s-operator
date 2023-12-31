@@ -21,7 +21,7 @@ var _ = Describe("Database controller", func() {
 	)
 
 	Context("When updating Database Status", func() {
-		It("Should increase CronJob Status.Active count when new Jobs are created", func() {
+		It("Should Database has to be created", func() {
 			By("By creating a new CronJob")
 			ctx := context.Background()
 			Database := &postgresv1.Database{

@@ -133,9 +133,9 @@ func main() {
 	}
 
 	if err = (&controller.DatabaseReconciler{
-		Client:  mgr.GetClient(),
-		Scheme:  mgr.GetScheme(),
-		Posgres: &postgres,
+		Client:   mgr.GetClient(),
+		Scheme:   mgr.GetScheme(),
+		Postgres: &postgres,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "Database")
 		os.Exit(1)

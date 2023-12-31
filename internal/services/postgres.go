@@ -50,8 +50,8 @@ const (
 )
 
 const (
-	ReadWriteSuffix string = "app_rw"
-	ReadOnlySuffix  string = "app_ro"
+	ReadWriteSuffix string = "app_rw" // Read-Write role for app will have this suffix `<databasename>_app_rw`
+	ReadOnlySuffix  string = "app_ro" // Read-Only role for app will have this suffix `<databasename>_app_ro`
 )
 
 type PostgresService struct {
@@ -100,6 +100,8 @@ func (p *PostgresService) CreateDB(dbname string) error {
 	return nil
 }
 
+// see https://www.postgresql.org/docs/12/ddl-priv.html &
+// https://www.postgresql.org/docs/12/sql-grant.html
 func (p *PostgresService) createRole(dbname string, roleType RoleType) (rolename string, err error) {
 	var roleName string
 	var grant string
@@ -124,6 +126,14 @@ func (p *PostgresService) createRole(dbname string, roleType RoleType) (rolename
 	if _, err := dbClient.Exec(grantStmt); err != nil {
 		return "", err
 	}
+	// grant usage on public schema to RO role
+	if roleType == ReadOnly {
+		grantForSchema := fmt.Sprintf("GRANT USAGE ON SCHMEA public TO %s", roleName)
+		if _, err := dbClient.Exec(grantForSchema); err != nil {
+			return "", err
+		}
+	}
+
 	return roleName, nil
 }
 
@@ -137,4 +147,60 @@ func (p *PostgresService) CreateRORole(dbname string) (roleName string, err erro
 
 func AlreadyExist(err error) bool {
 	return strings.Contains(err.Error(), "already exists")
+}
+
+// see https://www.postgresql.org/docs/12/sql-alterdefaultprivileges.html
+func (p *PostgresService) ConfigureDefaultPrivileges(dbname, roleRW, roleRO string) (err error) {
+	dbClient, err := p.getDBClient(dbname)
+	if err != nil {
+		return err
+	}
+
+	stmtRWTpls := []string{
+		"ALTER DEFAULT PRIVILEGES FOR ROLE %s GRANT ALL ON TABLES TO %s",
+		"ALTER DEFAULT PRIVILEGES FOR ROLE %s GRANT ALL ON SEQUENCES TO %s",
+		"ALTER DEFAULT PRIVILEGES FOR ROLE %s GRANT ALL ON FUNCTIONS TO %s",
+		"ALTER DEFAULT PRIVILEGES FOR ROLE %s GRANT ALL ON TYPES TO %s",
+		"ALTER DEFAULT PRIVILEGES FOR ROLE %s GRANT ALL ON SCHEMAS TO %s",
+	}
+	// grantor: roleRW, grantee: Admin user
+	for i := 0; i < len(stmtRWTpls); i++ {
+		statement := fmt.Sprintf(stmtRWTpls[i], roleRW, p.MasterUsername)
+		_, err := dbClient.Exec(statement)
+		if err != nil {
+			return fmt.Errorf("failed to excute statment: %s, error: %s", statement, err)
+		}
+	}
+
+	// grantor: Admin User, grantee: roleRW
+	for i := 0; i < len(stmtRWTpls); i++ {
+		statement := fmt.Sprintf(stmtRWTpls[i], p.MasterUsername, roleRW)
+		_, err := dbClient.Exec(statement)
+		if err != nil {
+			return fmt.Errorf("failed to excute statment: %s, error: %s", statement, err)
+		}
+	}
+
+	stmtROTpls := []string{
+		"ALTER DEFAULT PRIVILEGES FOR ROLE %s GRANT SELECT ON TABLES TO %s",
+		"ALTER DEFAULT PRIVILEGES FOR ROLE %s GRANT USAGE ON SCHEMAS TO %s",
+	}
+	// grantor: roleRW, grantee: roleRO
+	for i := 0; i < len(stmtROTpls); i++ {
+		statement := fmt.Sprintf(stmtROTpls[i], roleRW, roleRO)
+		_, err := dbClient.Exec(statement)
+		if err != nil {
+			return fmt.Errorf("failed to excute statment: %s, error: %s", statement, err)
+		}
+	}
+	// grantor: Admin User, grantee: roleRO
+	for i := 0; i < len(stmtROTpls); i++ {
+		statement := fmt.Sprintf(stmtROTpls[i], p.MasterUsername, roleRO)
+		_, err := dbClient.Exec(statement)
+		if err != nil {
+			return fmt.Errorf("failed to excute statment: %s, error: %s", statement, err)
+		}
+	}
+
+	return nil
 }
