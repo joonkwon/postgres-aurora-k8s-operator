@@ -15,9 +15,8 @@ var _ = Describe("Database controller", func() {
 
 	// Define utility constants for object names and testing timeouts/durations and intervals.
 	const (
-		DatabaseObjectName = "testdb"
+		DatabaseObjectName = "test-db"
 		DatabaseNamespace  = "default"
-		DatabaseName       = "myapplication_db"
 	)
 
 	Context("When updating Database Status", func() {
@@ -33,9 +32,7 @@ var _ = Describe("Database controller", func() {
 					Name:      DatabaseObjectName,
 					Namespace: DatabaseNamespace,
 				},
-				Spec: postgresv1.DatabaseSpec{
-					DabaseName: DatabaseName,
-				},
+				Spec: postgresv1.DatabaseSpec{},
 			}
 			Expect(k8sClient.Create(ctx, Database)).Should(Succeed())
 		})

@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -63,6 +64,7 @@ func (r *DatabaseReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	log := log.FromContext(ctx)
 	log.Info("Reconcile is running")
 
+	// TODO: implement validation for uniqueness of dabasename
 	database := &databasev1.Database{}
 	if err := r.Get(ctx, req.NamespacedName, database); err != nil {
 		log.Error(err, "Unable to fetch Database")
@@ -163,7 +165,7 @@ func (r *DatabaseReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 
 	// TODO: implement database name colision
 	// create database and ignore database already exists error
-	dbname := database.Spec.DabaseName
+	dbname := strings.Replace(fmt.Sprintf("%s_%s", database.Namespace, database.Name), "-", "_", -1)
 	err := r.Postgres.CreateDB(dbname)
 	if err != nil && !services.AlreadyExist(err) {
 		log.Error(err, "Failed to create database", "databasename", dbname)
