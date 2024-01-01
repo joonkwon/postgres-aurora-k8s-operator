@@ -63,7 +63,7 @@ func (r *DatabaseReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	log := log.FromContext(ctx)
 	log.Info("Reconcile is running")
 
-	var database *databasev1.Database
+	database := &databasev1.Database{}
 	if err := r.Get(ctx, req.NamespacedName, database); err != nil {
 		log.Error(err, "Unable to fetch Database")
 
@@ -232,7 +232,7 @@ func (r *DatabaseReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	}
 	// update the condition
 	meta.SetStatusCondition(&database.Status.Conditions, metav1.Condition{Type: typeAvailableDatabase,
-		Status: metav1.ConditionTrue, Reason: "Database created",
+		Status: metav1.ConditionTrue, Reason: "Reconciling",
 		Message: fmt.Sprintf("Database creation for custom resource %s name were successfully accomplished", database.Name)})
 
 	if err := r.Status().Update(ctx, database); err != nil {

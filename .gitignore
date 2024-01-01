@@ -38,3 +38,6 @@ extra-no-commit.tf
 **/lambda/build/
 **/lambda/vendor/
 *.zip
+
+# exclude debug files
+*__debug_*

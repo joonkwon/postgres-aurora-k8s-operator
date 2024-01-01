@@ -128,7 +128,7 @@ func (p *PostgresService) createRole(dbname string, roleType RoleType) (rolename
 	}
 	// grant usage on public schema to RO role
 	if roleType == ReadOnly {
-		grantForSchema := fmt.Sprintf("GRANT USAGE ON SCHMEA public TO %s", roleName)
+		grantForSchema := fmt.Sprintf("GRANT USAGE ON SCHEMA public TO %s", roleName)
 		if _, err := dbClient.Exec(grantForSchema); err != nil {
 			return "", err
 		}

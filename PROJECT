@@ -17,4 +17,13 @@ resources:
   kind: Database
   path: postgres-aurora-db-user/api/v1
   version: v1
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: aurora.operator.k8s
+  group: postgres
+  kind: DBUser
+  path: postgres-aurora-db-user/api/v1
+  version: v1
 version: "3"
