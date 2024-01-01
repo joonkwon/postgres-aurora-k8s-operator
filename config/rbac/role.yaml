@@ -30,3 +30,29 @@ rules:
   - get
   - patch
   - update
+- apiGroups:
+  - postgres.aurora.operator.k8s
+  resources:
+  - dbusers
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - postgres.aurora.operator.k8s
+  resources:
+  - dbusers/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - postgres.aurora.operator.k8s
+  resources:
+  - dbusers/status
+  verbs:
+  - get
+  - patch
+  - update

@@ -3,17 +3,20 @@
 # It should be run by config/default
 resources:
 - bases/postgres.aurora.operator.k8s_databases.yaml
+- bases/postgres.aurora.operator.k8s_dbusers.yaml
 #+kubebuilder:scaffold:crdkustomizeresource
 
 patches:
 # [WEBHOOK] To enable webhook, uncomment all the sections with [WEBHOOK] prefix.
 # patches here are for enabling the conversion webhook for each CRD
 #- path: patches/webhook_in_databases.yaml
+#- path: patches/webhook_in_dbusers.yaml
 #+kubebuilder:scaffold:crdkustomizewebhookpatch
 
 # [CERTMANAGER] To enable cert-manager, uncomment all the sections with [CERTMANAGER] prefix.
 # patches here are for enabling the CA injection for each CRD
 #- path: patches/cainjection_in_databases.yaml
+#- path: patches/cainjection_in_dbusers.yaml
 #+kubebuilder:scaffold:crdkustomizecainjectionpatch
 
 # [WEBHOOK] To enable webhook, uncomment the following section

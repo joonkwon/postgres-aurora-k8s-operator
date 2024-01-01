@@ -1,0 +1,12 @@
+apiVersion: postgres.aurora.operator.k8s/v1
+kind: DBUser
+metadata:
+  labels:
+    app.kubernetes.io/name: dbuser
+    app.kubernetes.io/instance: dbuser-sample
+    app.kubernetes.io/part-of: postgres-db-user
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/created-by: postgres-db-user
+  name: dbuser-sample
+spec:
+  # TODO(user): Add fields here
