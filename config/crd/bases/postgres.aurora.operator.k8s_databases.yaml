@@ -111,10 +111,8 @@ spec:
                 type: array
               databaseName:
                 type: string
-            required:
-            - appRoleRo
-            - appRoleRw
-            - databaseName
+              defaultPrviConfigured:
+                type: boolean
             type: object
         type: object
     served: true

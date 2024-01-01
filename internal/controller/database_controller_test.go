@@ -22,7 +22,7 @@ var _ = Describe("Database controller", func() {
 
 	Context("When updating Database Status", func() {
 		It("Should Database has to be created", func() {
-			By("By creating a new CronJob")
+			By("By creating a new database")
 			ctx := context.Background()
 			Database := &postgresv1.Database{
 				TypeMeta: metav1.TypeMeta{

@@ -170,6 +170,11 @@ func (r *DatabaseReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		return ctrl.Result{}, err
 	}
 
+	// re-fetch the database
+	if err := r.Get(ctx, req.NamespacedName, database); err != nil {
+		log.Error(err, "Failed to re-fetch database")
+		return ctrl.Result{}, err
+	}
 	// update DatabaseName in the status
 	database.Status.DatabaseName = dbname
 	if err := r.Status().Update(ctx, database); err != nil {
@@ -191,6 +196,8 @@ func (r *DatabaseReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		log.Error(err, "Failed to create RO role for app")
 		return ctrl.Result{}, err
 	}
+
+	// update the status of the database
 	database.Status.AppRoleRW = roleRW
 	database.Status.AppRoleRO = roleRO
 	if err := r.Status().Update(ctx, database); err != nil {
@@ -203,9 +210,33 @@ func (r *DatabaseReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		log.Error(err, "Failed to configure Default Previleges")
 		return ctrl.Result{}, err
 	}
+
+	// update the status of the database
 	database.Status.DefaultPrivConfigured = true
 	if err := r.Status().Update(ctx, database); err != nil {
 		log.Error(err, "Failed to update Default Privilege Configuration Satus", "databasename", dbname)
+		return ctrl.Result{}, err
+	}
+
+	// Final Status Update
+	database.Status.DatabaseName = dbname
+	if err := r.Status().Update(ctx, database); err != nil {
+		log.Error(err, "Failed to update Databasename Satus", "databasename", dbname)
+		return ctrl.Result{}, err
+	}
+
+	// re-fetch the database
+	if err := r.Get(ctx, req.NamespacedName, database); err != nil {
+		log.Error(err, "Failed to re-fetch database")
+		return ctrl.Result{}, err
+	}
+	// update the condition
+	meta.SetStatusCondition(&database.Status.Conditions, metav1.Condition{Type: typeAvailableDatabase,
+		Status: metav1.ConditionTrue, Reason: "Database created",
+		Message: fmt.Sprintf("Database creation for custom resource %s name were successfully accomplished", database.Name)})
+
+	if err := r.Status().Update(ctx, database); err != nil {
+		log.Error(err, "Failed to update Database status")
 		return ctrl.Result{}, err
 	}
 
@@ -215,6 +246,8 @@ func (r *DatabaseReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 func (r *DatabaseReconciler) doFinalizerOperationsForDatabase(database *databasev1.Database) {
 	// TODO: remove database rw role
 	// TODO: remove database ro role
+	// TODO: check rw user is deleted
+	// TODO: check ro user is deleted
 }
 
 // SetupWithManager sets up the controller with the Manager.
