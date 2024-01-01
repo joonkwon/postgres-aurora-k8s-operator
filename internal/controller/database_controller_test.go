@@ -15,9 +15,8 @@ var _ = Describe("Database controller", func() {
 
 	// Define utility constants for object names and testing timeouts/durations and intervals.
 	const (
-		DatabaseName      = "test-database"
+		DatabaseName      = "testdb"
 		DatabaseNamespace = "default"
-		JobName           = "test-job"
 	)
 
 	Context("When updating Database Status", func() {

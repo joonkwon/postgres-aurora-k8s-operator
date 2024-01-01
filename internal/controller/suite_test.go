@@ -185,8 +185,9 @@ func setUpRDSIAMRole(p services.PostgresService) (err error) {
 	}
 	_, err = sql.Exec("CREATE ROLE rds_iam")
 	if err != nil {
-		return
+		return err
 	}
+
 	return
 }
 
@@ -244,7 +245,9 @@ func loadPostgresContainer(ctx context.Context, config postgresDockerConfig) (co
 }
 
 func containerRemove(ctx context.Context, containerID string) error {
+	time.Sleep(3 * time.Minute)
 	cli, err := dockerClient.NewClientWithOpts(dockerClient.FromEnv, dockerClient.WithAPIVersionNegotiation())
+	defer cli.Close()
 	if err != nil {
 		return err
 	}
