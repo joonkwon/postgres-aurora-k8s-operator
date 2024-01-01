@@ -28,8 +28,7 @@ type DatabaseSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
 
-	// Name is an example field of Database. Edit database_types.go to remove/update
-	// Name string `json:"name"`
+	DabaseName string `json:"databaseName"`
 }
 
 // DatabaseStatus defines the observed state of Database
