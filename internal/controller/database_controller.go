@@ -161,9 +161,9 @@ func (r *DatabaseReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		return ctrl.Result{}, nil
 	}
 
+	// TODO: implement database name colision
 	// create database and ignore database already exists error
-	// the database name is `<namespace>_<name>`
-	dbname := fmt.Sprintf("%s_%s", database.Namespace, database.Name)
+	dbname := database.Spec.DabaseName
 	err := r.Postgres.CreateDB(dbname)
 	if err != nil && !services.AlreadyExist(err) {
 		log.Error(err, "Failed to create database", "databasename", dbname)
@@ -232,7 +232,7 @@ func (r *DatabaseReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	}
 	// update the condition
 	meta.SetStatusCondition(&database.Status.Conditions, metav1.Condition{Type: typeAvailableDatabase,
-		Status: metav1.ConditionTrue, Reason: "Reconciling",
+		Status: metav1.ConditionTrue, Reason: "Reconciled",
 		Message: fmt.Sprintf("Database creation for custom resource %s name were successfully accomplished", database.Name)})
 
 	if err := r.Status().Update(ctx, database); err != nil {
