@@ -50,8 +50,8 @@ const (
 )
 
 const (
-	ReadWriteSuffix string = "app_rw" // Read-Write role for app will have this suffix `<databasename>_app_rw`
-	ReadOnlySuffix  string = "app_ro" // Read-Only role for app will have this suffix `<databasename>_app_ro`
+	ReadWriteSuffix string = "role_rw" // Read-Write role for app will have this suffix `<databasename>_role_rw`
+	ReadOnlySuffix  string = "role_ro" // Read-Only role for app will have this suffix `<databasename>_role_ro`
 )
 
 const (
@@ -217,7 +217,7 @@ func (p *PostgresService) CreateUser(username, roleName string) (err error) {
 	createStmt := fmt.Sprintf("CREATE USER %s", username)
 	grantRoleStmt := fmt.Sprintf("GRANT %s TO %s", roleName, username)
 	grantIAMStmt := fmt.Sprintf("GRANT %s TO %s", IAM_AUTH_ROLE, username)
-	alterRoleStmt := fmt.Sprintf("ALTER ROLE %s SET ROLE %s", username, IAM_AUTH_ROLE)
+	alterRoleStmt := fmt.Sprintf("ALTER ROLE %s SET ROLE %s", username, roleName)
 
 	_, err = dbClient.Exec(createStmt)
 	if err != nil {

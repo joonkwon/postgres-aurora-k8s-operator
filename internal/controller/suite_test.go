@@ -166,6 +166,7 @@ var _ = BeforeSuite(func() {
 })
 
 var _ = AfterSuite(func() {
+
 	By("tearing down Postgres Docker container")
 	err := containerRemove(context.TODO(), postgresContainerID)
 	Expect(err).NotTo(HaveOccurred())

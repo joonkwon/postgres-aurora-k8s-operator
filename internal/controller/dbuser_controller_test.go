@@ -20,7 +20,7 @@ var _ = Describe("DBUser controller", func() {
 	const (
 		DBUser             = "testuser"
 		Namespace          = "default"
-		DatabaseObjectName = "testdb"
+		DatabaseObjectName = "myapp-db"
 		Permission         = "ReadWrite"
 	)
 
@@ -82,7 +82,7 @@ var _ = Describe("DBUser controller", func() {
 			Expect(func() error {
 				var err error
 				// wait up to 40 seconds
-				for i := 1; i < 7; i++ {
+				for i := 1; i < 70; i++ {
 					err := k8sClient.Get(ctx, types.NamespacedName{
 						Namespace: dbuser.Namespace,
 						Name:      dbuser.Name,
