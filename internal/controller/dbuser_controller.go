@@ -98,6 +98,22 @@ func (r *DBUserReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 		return ctrl.Result{}, err
 	}
 
+	// Set DBUserName
+	var dbuserName string
+	if dbuser.Spec.Permission == "ReadOnly" {
+		dbuserName = fmt.Sprintf("%s_%s", database.Status.DatabaseName, "ro")
+	}
+	if dbuser.Spec.Permission == "ReadWrite" {
+		dbuserName = fmt.Sprintf("%s_%s", database.Status.DatabaseName, "rw")
+	}
+
+	// temporary status update to run test all the way
+	dbuser.Status.UserName = dbuserName
+	if err := r.Status().Update(ctx, dbuser); err != nil {
+		log.Error(err, "Failed to update DBUser status")
+		return ctrl.Result{}, err
+	}
+
 	return ctrl.Result{}, nil
 }
 

@@ -42,8 +42,8 @@ var _ = Describe("DBUser controller", func() {
 		Expect(k8sClient.Create(ctx, database)).Should(Succeed())
 		Expect(func() error {
 			var err error
-			// wait up to 60 seconds
-			for i := 1; i < 30; i++ {
+			// wait up to 40 seconds
+			for i := 1; i < 6; i++ {
 				err := k8sClient.Get(ctx, types.NamespacedName{
 					Namespace: database.Namespace,
 					Name:      database.Name,
@@ -79,6 +79,21 @@ var _ = Describe("DBUser controller", func() {
 				},
 			}
 			Expect(k8sClient.Create(ctx, dbuser)).Should(Succeed())
+			Expect(func() error {
+				var err error
+				// wait up to 40 seconds
+				for i := 1; i < 7; i++ {
+					err := k8sClient.Get(ctx, types.NamespacedName{
+						Namespace: dbuser.Namespace,
+						Name:      dbuser.Name,
+					}, dbuser)
+					if err == nil && dbuser.Status.UserName != "" {
+						return nil
+					}
+					time.Sleep(time.Duration(2*i) * time.Second)
+				}
+				return fmt.Errorf("timed out whith err: %s", err)
+			}()).Should(Succeed())
 		})
 	})
 })
