@@ -54,6 +54,10 @@ const (
 	ReadOnlySuffix  string = "app_ro" // Read-Only role for app will have this suffix `<databasename>_app_ro`
 )
 
+const (
+	IAM_AUTH_ROLE string = "rds_iam"
+)
+
 type PostgresService struct {
 	Host           string
 	MasterUsername string // Admin User
@@ -200,6 +204,39 @@ func (p *PostgresService) ConfigureDefaultPrivileges(dbname, roleRW, roleRO stri
 		if err != nil {
 			return fmt.Errorf("failed to excute statment: %s, error: %s", statement, err)
 		}
+	}
+
+	return nil
+}
+
+func (p *PostgresService) CreateUser(username, roleName string) (err error) {
+	dbClient, err := p.GetMgmtDBClient()
+	if err != nil {
+		return err
+	}
+	createStmt := fmt.Sprintf("CREATE USER %s", username)
+	grantRoleStmt := fmt.Sprintf("GRANT %s TO %s", roleName, username)
+	grantIAMStmt := fmt.Sprintf("GRANT %s TO %s", IAM_AUTH_ROLE, username)
+	alterRoleStmt := fmt.Sprintf("ALTER ROLE %s SET ROLE %s", username, IAM_AUTH_ROLE)
+
+	_, err = dbClient.Exec(createStmt)
+	if err != nil {
+		return fmt.Errorf("failed to excute statment: %s, error: %s", createStmt, err)
+	}
+
+	_, err = dbClient.Exec(grantIAMStmt)
+	if err != nil {
+		return fmt.Errorf("failed to excute statment: %s, error: %s", grantIAMStmt, err)
+	}
+
+	_, err = dbClient.Exec(grantRoleStmt)
+	if err != nil {
+		return fmt.Errorf("failed to excute statment: %s, error: %s", grantRoleStmt, err)
+	}
+
+	_, err = dbClient.Exec(alterRoleStmt)
+	if err != nil {
+		return fmt.Errorf("failed to excute statment: %s, error: %s", alterRoleStmt, err)
 	}
 
 	return nil

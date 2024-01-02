@@ -29,6 +29,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	postgresv1 "postgres-aurora-db-user/api/v1"
+	"postgres-aurora-db-user/internal/services"
 )
 
 const (
@@ -40,7 +41,8 @@ const (
 // DBUserReconciler reconciles a DBUser object
 type DBUserReconciler struct {
 	client.Client
-	Scheme *runtime.Scheme
+	Scheme   *runtime.Scheme
+	Postgres *services.PostgresService
 }
 
 //+kubebuilder:rbac:groups=postgres.aurora.operator.k8s,resources=dbusers,verbs=get;list;watch;create;update;patch;delete
@@ -100,19 +102,36 @@ func (r *DBUserReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 
 	// Set DBUserName
 	var dbuserName string
-	if dbuser.Spec.Permission == "ReadOnly" {
+	var roleName string
+	if dbuser.Spec.Permission == postgresv1.PermissionReadOnly {
 		dbuserName = fmt.Sprintf("%s_%s", database.Status.DatabaseName, "ro")
+		roleName = database.Status.AppRoleRO
 	}
-	if dbuser.Spec.Permission == "ReadWrite" {
+	if dbuser.Spec.Permission == postgresv1.PermissionReadWrite {
 		dbuserName = fmt.Sprintf("%s_%s", database.Status.DatabaseName, "rw")
+		roleName = database.Status.AppRoleRW
 	}
 
-	// temporary status update to run test all the way
+	// Create DBUser
+	if err := r.Postgres.CreateUser(dbuserName, roleName); err != nil {
+		log.Error(err, "Unable to create user", "username", dbuserName, "role", roleName)
+		return ctrl.Result{}, err
+	}
 	dbuser.Status.UserName = dbuserName
 	if err := r.Status().Update(ctx, dbuser); err != nil {
 		log.Error(err, "Failed to update DBUser status")
 		return ctrl.Result{}, err
 	}
+
+	dbuser.Status.Hostname = r.Postgres.Host
+	dbuser.Status.Database = database.Status.DatabaseName
+	dbuser.Status.Permission = dbuser.Spec.Permission
+	if err := r.Status().Update(ctx, dbuser); err != nil {
+		log.Error(err, "Failed to update DBUser status")
+		return ctrl.Result{}, err
+	}
+
+	// TODO: finalizer and conditions
 
 	return ctrl.Result{}, nil
 }
