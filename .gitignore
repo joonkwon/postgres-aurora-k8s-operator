@@ -41,3 +41,6 @@ extra-no-commit.tf
 
 # exclude debug files
 *__debug_*
+
+# exclude vendor
+vendor/
