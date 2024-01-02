@@ -27,8 +27,6 @@ import (
 type DatabaseSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
-
-	DabaseName string `json:"databaseName"`
 }
 
 // DatabaseStatus defines the observed state of Database

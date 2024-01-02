@@ -18,13 +18,23 @@ package controller
 
 import (
 	"context"
+	"fmt"
 
+	"k8s.io/apimachinery/pkg/api/meta"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	postgresv1 "postgres-aurora-db-user/api/v1"
+)
+
+const (
+	dbUserFinalizer     = "database.postgres.aurora.operator.k8s/finalizer"
+	typeDegradedDBUser  = "Degraded"
+	typeAvailableDBUser = "Available"
 )
 
 // DBUserReconciler reconciles a DBUser object
@@ -47,9 +57,62 @@ type DBUserReconciler struct {
 // For more details, check Reconcile and its Result here:
 // - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.16.3/pkg/reconcile
 func (r *DBUserReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	_ = log.FromContext(ctx)
+	log := log.FromContext(ctx)
+	log.Info("DBUser reconcile started")
 
-	// TODO(user): your logic here
+	dbuser := &postgresv1.DBUser{}
+	if err := r.Get(ctx, req.NamespacedName, dbuser); err != nil {
+		log.Error(err, "Unable to fetch DBUser")
+		return ctrl.Result{}, client.IgnoreNotFound(err)
+	}
+	log.Info("found dbuser to reconcile")
+
+	// Let's just set the status as Unknown when no status are available
+	if dbuser.Status.Conditions == nil || len(dbuser.Status.Conditions) == 0 {
+		meta.SetStatusCondition(&dbuser.Status.Conditions, metav1.Condition{Type: typeAvailableDBUser, Status: metav1.ConditionUnknown, Reason: "Reconciling", Message: "Starting reconciliation"})
+		if err := r.Status().Update(ctx, dbuser); err != nil {
+			log.Error(err, "Failed to update DBUser status")
+			return ctrl.Result{}, err
+		}
+
+		// Let's re-fetch the DBUser Custom Resource after update the status
+		// so that we have the latest state of the resource on the cluster and we will avoid
+		// raise the issue "the object has been modified, please apply
+		// your changes to the latest version and try again" which would re-trigger the reconciliation
+		// if we try to update it again in the following operations
+		if err := r.Get(ctx, req.NamespacedName, dbuser); err != nil {
+			log.Error(err, "Failed to re-fetch DBUser")
+			return ctrl.Result{}, err
+		}
+	}
+
+	database := postgresv1.Database{}
+	if err := r.Get(ctx, types.NamespacedName(dbuser.Spec.Database), &database); err != nil {
+		log.Error(err, "Unable to fetch Database for the DBUser")
+		return ctrl.Result{}, err
+	}
+
+	if !databaseIsReady(database) {
+		err := fmt.Errorf("database is not ready")
+		log.Error(err, "for DBUser", "name", database.Name, "namespace", database.Namespace)
+		return ctrl.Result{}, err
+	}
+
+	// Set DBUserName
+	var dbuserName string
+	if dbuser.Spec.Permission == "ReadOnly" {
+		dbuserName = fmt.Sprintf("%s_%s", database.Status.DatabaseName, "ro")
+	}
+	if dbuser.Spec.Permission == "ReadWrite" {
+		dbuserName = fmt.Sprintf("%s_%s", database.Status.DatabaseName, "rw")
+	}
+
+	// temporary status update to run test all the way
+	dbuser.Status.UserName = dbuserName
+	if err := r.Status().Update(ctx, dbuser); err != nil {
+		log.Error(err, "Failed to update DBUser status")
+		return ctrl.Result{}, err
+	}
 
 	return ctrl.Result{}, nil
 }
@@ -59,4 +122,13 @@ func (r *DBUserReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&postgresv1.DBUser{}).
 		Complete(r)
+}
+
+func databaseIsReady(database postgresv1.Database) bool {
+	// TODO: implement check for condition in Status
+	if database.Status.AppRoleRO == "" || database.Status.AppRoleRW == "" ||
+		database.Status.DatabaseName == "" {
+		return false
+	}
+	return true
 }

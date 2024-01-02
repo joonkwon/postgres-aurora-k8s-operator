@@ -1,0 +1,8 @@
+{
+    "go.testFlags": [
+        // "-timeout 30m",
+        "-v",
+        "-coverprofile vs-cover.out", // not working
+        "-cover" // not working
+    ]
+}

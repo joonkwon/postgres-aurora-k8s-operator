@@ -143,6 +143,12 @@ var _ = BeforeSuite(func() {
 	}).SetupWithManager(k8sManager)
 	Expect(err).ToNot(HaveOccurred())
 
+	err = (&DBUserReconciler{
+		Client: k8sManager.GetClient(),
+		Scheme: k8sManager.GetScheme(),
+	}).SetupWithManager(k8sManager)
+	Expect(err).ToNot(HaveOccurred())
+
 	go func() {
 		defer GinkgoRecover()
 		err = k8sManager.Start(ctrl.SetupSignalHandler())
@@ -245,7 +251,6 @@ func loadPostgresContainer(ctx context.Context, config postgresDockerConfig) (co
 }
 
 func containerRemove(ctx context.Context, containerID string) error {
-	time.Sleep(3 * time.Minute)
 	cli, err := dockerClient.NewClientWithOpts(dockerClient.FromEnv, dockerClient.WithAPIVersionNegotiation())
 	defer cli.Close()
 	if err != nil {
