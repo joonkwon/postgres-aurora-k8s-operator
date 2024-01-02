@@ -20,6 +20,11 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+const (
+	PermissionReadOnly  Permission = "ReadOnly"
+	PermissionReadWrite Permission = "ReadWrite"
+)
+
 type DatabaseNamespaceName struct {
 	Namespace string `json:"namespace"`
 	Name      string `json:"name"`
@@ -50,7 +55,7 @@ type DBUserStatus struct {
 	UserName string `json:"userName,omitempty"`
 
 	Permission Permission `json:"permission,omitempty"`
-	Database   Database   `json:"database,omitempty"`
+	Database   string     `json:"database,omitempty"`
 	Hostname   string     `json:"hostname,omitempty"`
 
 	Conditions []metav1.Condition `json:"conditions,omitempty" patchStrategy:"merge" patchMergeKey:"type" protobuf:"bytes,1,rep,name=conditions"`

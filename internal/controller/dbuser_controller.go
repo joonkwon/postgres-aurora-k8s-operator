@@ -18,7 +18,9 @@ package controller
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"strings"
 
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -26,13 +28,15 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	postgresv1 "postgres-aurora-db-user/api/v1"
+	"postgres-aurora-db-user/internal/services"
 )
 
 const (
-	dbUserFinalizer     = "database.postgres.aurora.operator.k8s/finalizer"
+	dbUserFinalizer     = "dbuser.postgres.aurora.operator.k8s/finalizer"
 	typeDegradedDBUser  = "Degraded"
 	typeAvailableDBUser = "Available"
 )
@@ -40,7 +44,8 @@ const (
 // DBUserReconciler reconciles a DBUser object
 type DBUserReconciler struct {
 	client.Client
-	Scheme *runtime.Scheme
+	Scheme   *runtime.Scheme
+	Postgres *services.PostgresService
 }
 
 //+kubebuilder:rbac:groups=postgres.aurora.operator.k8s,resources=dbusers,verbs=get;list;watch;create;update;patch;delete
@@ -86,6 +91,20 @@ func (r *DBUserReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 		}
 	}
 
+	// Set finalizer for database object
+	if !controllerutil.ContainsFinalizer(dbuser, dbUserFinalizer) {
+		log.Info("Adding Finalizer for DBUser")
+		if ok := controllerutil.AddFinalizer(dbuser, dbUserFinalizer); !ok {
+			log.Error(errors.New("failed to add finalizer into the dbuser resource"), "Failed to add finalizer into the custom resource")
+			return ctrl.Result{Requeue: true}, nil
+		}
+
+		if err := r.Update(ctx, dbuser); err != nil {
+			log.Error(err, "Failed to update custom resource to add finalizer")
+			return ctrl.Result{}, err
+		}
+	}
+
 	database := postgresv1.Database{}
 	if err := r.Get(ctx, types.NamespacedName(dbuser.Spec.Database), &database); err != nil {
 		log.Error(err, "Unable to fetch Database for the DBUser")
@@ -98,22 +117,59 @@ func (r *DBUserReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 		return ctrl.Result{}, err
 	}
 
-	// Set DBUserName
-	var dbuserName string
-	if dbuser.Spec.Permission == "ReadOnly" {
-		dbuserName = fmt.Sprintf("%s_%s", database.Status.DatabaseName, "ro")
-	}
-	if dbuser.Spec.Permission == "ReadWrite" {
-		dbuserName = fmt.Sprintf("%s_%s", database.Status.DatabaseName, "rw")
+	// set finalize on database for dbuser
+	// this will prevent, database being deleted before removing the user
+	if !controllerutil.ContainsFinalizer(&database, dbUserFinalizer) {
+		log.Info("Adding DBUser Finalizer to Database")
+		if ok := controllerutil.AddFinalizer(&database, dbUserFinalizer); !ok {
+			log.Error(errors.New("failed to add DBUser finalizer into the database resource"), "Failed to add finalizer into the custom resource")
+			return ctrl.Result{Requeue: true}, nil
+		}
+
+		if err := r.Update(ctx, &database); err != nil {
+			log.Error(err, "Failed to update custom resource to add finalizer")
+			return ctrl.Result{}, err
+		}
 	}
 
-	// temporary status update to run test all the way
+	// Set DBUserName
+	var dbuserName string = strings.Replace(fmt.Sprintf("%s_%s", dbuser.Namespace, dbuser.Name), "-", "_", -1)
+	var roleName string
+	if dbuser.Spec.Permission == postgresv1.PermissionReadOnly {
+		roleName = database.Status.AppRoleRO
+	}
+	if dbuser.Spec.Permission == postgresv1.PermissionReadWrite {
+		roleName = database.Status.AppRoleRW
+	}
+
+	// Create DBUser
+	if err := r.Postgres.CreateUser(dbuserName, roleName); err != nil && !services.AlreadyExist(err) {
+		log.Error(err, "Unable to create user", "username", dbuserName, "role", roleName)
+		return ctrl.Result{}, err
+	}
 	dbuser.Status.UserName = dbuserName
 	if err := r.Status().Update(ctx, dbuser); err != nil {
 		log.Error(err, "Failed to update DBUser status")
 		return ctrl.Result{}, err
 	}
 
+	dbuser.Status.Hostname = r.Postgres.Host
+	dbuser.Status.Database = database.Status.DatabaseName
+	dbuser.Status.Permission = dbuser.Spec.Permission
+
+	// update the condition
+	meta.SetStatusCondition(&dbuser.Status.Conditions, metav1.Condition{Type: typeAvailableDBUser, Status: metav1.ConditionTrue, Reason: "Reconciling", Message: "user created"})
+
+	if err := r.Status().Update(ctx, dbuser); err != nil {
+		log.Error(err, "Failed to update DBUser status")
+		return ctrl.Result{}, err
+	}
+
+	// TODO: delete logic
+	// TODO: add IAM policy creation??? leave it to a separate IRSA creation workflow?
+
+	// postgres role management:
+	// https://www.prisma.io/dataguide/postgresql/authentication-and-authorization/role-management
 	return ctrl.Result{}, nil
 }
 

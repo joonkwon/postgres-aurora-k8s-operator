@@ -110,6 +110,12 @@ func (r *DatabaseReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	// check if Database is to be deleted
 	isDatabaseMarkedToBeDeleted := database.GetDeletionTimestamp() != nil
 	if isDatabaseMarkedToBeDeleted {
+		if controllerutil.ContainsFinalizer(database, dbUserFinalizer) {
+			log.Info("Database contains DBUser finalizer")
+			err := fmt.Errorf("cannot delete the database: %s. DBUser associated with the database has to be deleted first", req.NamespacedName)
+			return ctrl.Result{}, err
+		}
+
 		if controllerutil.ContainsFinalizer(database, databaseFinalizer) {
 			log.Info("Performing Finalizer Operations for database before delete CR")
 

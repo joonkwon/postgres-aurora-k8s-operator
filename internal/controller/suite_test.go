@@ -144,8 +144,9 @@ var _ = BeforeSuite(func() {
 	Expect(err).ToNot(HaveOccurred())
 
 	err = (&DBUserReconciler{
-		Client: k8sManager.GetClient(),
-		Scheme: k8sManager.GetScheme(),
+		Client:   k8sManager.GetClient(),
+		Scheme:   k8sManager.GetScheme(),
+		Postgres: &postgres,
 	}).SetupWithManager(k8sManager)
 	Expect(err).ToNot(HaveOccurred())
 
@@ -165,6 +166,7 @@ var _ = BeforeSuite(func() {
 })
 
 var _ = AfterSuite(func() {
+
 	By("tearing down Postgres Docker container")
 	err := containerRemove(context.TODO(), postgresContainerID)
 	Expect(err).NotTo(HaveOccurred())
