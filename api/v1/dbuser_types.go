@@ -20,6 +20,11 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+type DatabaseNamespaceName struct {
+	Namespace string `json:"namespace"`
+	Name      string `json:"name"`
+}
+
 // +kubebuilder:validation:Enum=ReadWrite;ReadOnly
 type Permission string
 
@@ -32,9 +37,7 @@ type DBUserSpec struct {
 	// Important: Run "make" to regenerate code after modifying this file
 
 	// Database is the target database where the user will have permissions
-	Database Database `json:"database"`
-
-	UserName string `json:"username"`
+	Database DatabaseNamespaceName `json:"database"`
 
 	// UserType is permissions spec for the user. "ReadWrite" or "ReadOnly"
 	Permission Permission `json:"permission"`

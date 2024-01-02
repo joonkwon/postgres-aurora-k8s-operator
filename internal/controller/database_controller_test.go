@@ -2,11 +2,14 @@ package controller
 
 import (
 	"context"
+	"fmt"
+	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 
 	postgresv1 "postgres-aurora-db-user/api/v1"
 )
@@ -35,6 +38,22 @@ var _ = Describe("Database controller", func() {
 				Spec: postgresv1.DatabaseSpec{},
 			}
 			Expect(k8sClient.Create(ctx, Database)).Should(Succeed())
+
+			Expect(func() error {
+				var err error
+				// wait up to 60 seconds
+				for i := 1; i < 30; i++ {
+					err := k8sClient.Get(ctx, types.NamespacedName{
+						Namespace: Database.Namespace,
+						Name:      Database.Name,
+					}, Database)
+					if err == nil && Database.Status.DatabaseName != "" {
+						return nil
+					}
+					time.Sleep(time.Duration(2*i) * time.Second)
+				}
+				return fmt.Errorf("timed out with err: %s", err)
+			}()).Should(Succeed())
 		})
 	})
 })

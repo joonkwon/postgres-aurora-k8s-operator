@@ -30,7 +30,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
-	databasev1 "postgres-aurora-db-user/api/v1"
+	postgresv1 "postgres-aurora-db-user/api/v1"
 	"postgres-aurora-db-user/internal/services"
 )
 
@@ -38,6 +38,7 @@ const (
 	databaseFinalizer     = "database.postgres.aurora.operator.k8s/finalizer"
 	typeDegradedDatabase  = "Degraded"
 	typeAvailableDatabase = "Available"
+	typeReadyDatabase     = "Ready"
 )
 
 // DatabaseReconciler reconciles a Database object
@@ -62,10 +63,10 @@ type DatabaseReconciler struct {
 // - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.16.3/pkg/reconcile
 func (r *DatabaseReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	log := log.FromContext(ctx)
-	log.Info("Reconcile is running")
+	log.Info("Database reconcile started")
 
 	// TODO: implement validation for uniqueness of dabasename
-	database := &databasev1.Database{}
+	database := &postgresv1.Database{}
 	if err := r.Get(ctx, req.NamespacedName, database); err != nil {
 		log.Error(err, "Unable to fetch Database")
 
@@ -233,9 +234,9 @@ func (r *DatabaseReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		return ctrl.Result{}, err
 	}
 	// update the condition
-	meta.SetStatusCondition(&database.Status.Conditions, metav1.Condition{Type: typeAvailableDatabase,
+	meta.SetStatusCondition(&database.Status.Conditions, metav1.Condition{Type: typeReadyDatabase,
 		Status: metav1.ConditionTrue, Reason: "Reconciled",
-		Message: fmt.Sprintf("Database creation for custom resource %s name were successfully accomplished", database.Name)})
+		Message: fmt.Sprintf("Database creation for custom resource %s were successful", database.Name)})
 
 	if err := r.Status().Update(ctx, database); err != nil {
 		log.Error(err, "Failed to update Database status")
@@ -245,7 +246,7 @@ func (r *DatabaseReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	return ctrl.Result{}, nil
 }
 
-func (r *DatabaseReconciler) doFinalizerOperationsForDatabase(database *databasev1.Database) {
+func (r *DatabaseReconciler) doFinalizerOperationsForDatabase(database *postgresv1.Database) {
 	// TODO: remove database rw role
 	// TODO: remove database ro role
 	// TODO: check rw user is deleted
@@ -255,6 +256,6 @@ func (r *DatabaseReconciler) doFinalizerOperationsForDatabase(database *database
 // SetupWithManager sets up the controller with the Manager.
 func (r *DatabaseReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&databasev1.Database{}).
+		For(&postgresv1.Database{}).
 		Complete(r)
 }
