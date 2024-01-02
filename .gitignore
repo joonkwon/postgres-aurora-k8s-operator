@@ -43,4 +43,4 @@ extra-no-commit.tf
 *__debug_*
 
 # exclude vendor
-vendor/
+vendor/*
