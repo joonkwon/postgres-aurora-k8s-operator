@@ -54,6 +54,14 @@ var _ = Describe("Database controller", func() {
 				}
 				return fmt.Errorf("timed out with err: %s", err)
 			}()).Should(Succeed())
+			database := &postgresv1.Database{}
+			k8sClient.Get(ctx, types.NamespacedName{
+				Namespace: DatabaseNamespace,
+				Name:      DatabaseObjectName,
+			}, database)
+			Expect(database.Status).To(HaveField("DatabaseName", "default_test_db"))
+			Expect(database.Status).To(HaveField("AppRoleRW", "default_test_db_role_rw"))
+			Expect(database.Status).To(HaveField("AppRoleRO", "default_test_db_role_ro"))
 		})
 	})
 })

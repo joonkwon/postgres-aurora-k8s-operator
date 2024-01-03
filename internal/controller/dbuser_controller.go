@@ -91,7 +91,19 @@ func (r *DBUserReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 		}
 	}
 
-	// Set finalizer for database object
+	database := postgresv1.Database{}
+	if err := r.Get(ctx, types.NamespacedName(dbuser.Spec.Database), &database); err != nil {
+		log.Error(err, "Unable to fetch Database for the DBUser")
+		return ctrl.Result{}, err
+	}
+
+	if !databaseIsReady(database) {
+		err := fmt.Errorf("database is not ready")
+		log.Error(err, "for DBUser", "name", database.Name, "namespace", database.Namespace)
+		return ctrl.Result{}, err
+	}
+
+	// Set finalizer for DBUser object
 	if !controllerutil.ContainsFinalizer(dbuser, dbUserFinalizer) {
 		log.Info("Adding Finalizer for DBUser")
 		if ok := controllerutil.AddFinalizer(dbuser, dbUserFinalizer); !ok {
@@ -103,18 +115,6 @@ func (r *DBUserReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 			log.Error(err, "Failed to update custom resource to add finalizer")
 			return ctrl.Result{}, err
 		}
-	}
-
-	database := postgresv1.Database{}
-	if err := r.Get(ctx, types.NamespacedName(dbuser.Spec.Database), &database); err != nil {
-		log.Error(err, "Unable to fetch Database for the DBUser")
-		return ctrl.Result{}, err
-	}
-
-	if !databaseIsReady(database) {
-		err := fmt.Errorf("database is not ready")
-		log.Error(err, "for DBUser", "name", database.Name, "namespace", database.Namespace)
-		return ctrl.Result{}, err
 	}
 
 	// set finalize on database for dbuser
@@ -130,6 +130,66 @@ func (r *DBUserReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 			log.Error(err, "Failed to update custom resource to add finalizer")
 			return ctrl.Result{}, err
 		}
+	}
+
+	// Delete Finalizers for deletion
+	isDBUserMarkedToBeDeleted := dbuser.GetDeletionTimestamp() != nil
+	if isDBUserMarkedToBeDeleted {
+		if controllerutil.ContainsFinalizer(dbuser, dbUserFinalizer) {
+			meta.SetStatusCondition(&dbuser.Status.Conditions, metav1.Condition{Type: typeDegradedDBUser,
+				Status: metav1.ConditionUnknown, Reason: "Finalizing",
+				Message: fmt.Sprintf("Performing finalizer operations for the custom resource: %s", dbuser.Name)})
+
+			if err := r.Status().Update(ctx, dbuser); err != nil {
+				log.Error(err, "Failed to update DBUser status")
+				return ctrl.Result{}, err
+			}
+
+			r.doFinalizerOperationsForDBUser(dbuser)
+
+			// re-fetch dbuser
+			if err := r.Get(ctx, req.NamespacedName, dbuser); err != nil {
+				log.Error(err, "Failed to re-fetch DBUser")
+				return ctrl.Result{}, err
+			}
+
+			meta.SetStatusCondition(&dbuser.Status.Conditions, metav1.Condition{Type: typeDegradedDBUser,
+				Status: metav1.ConditionUnknown, Reason: "Finalizing",
+				Message: fmt.Sprintf("Finalizer operations for custom resource %s name were successfully accomplished", dbuser.Name)})
+
+			if err := r.Status().Update(ctx, dbuser); err != nil {
+				log.Error(err, "Failed to update DBUser status")
+				return ctrl.Result{}, err
+			}
+
+			log.Info("Removing Finalizer for DBUser after successfully perform the operations")
+			if ok := controllerutil.RemoveFinalizer(dbuser, dbUserFinalizer); !ok {
+				err := fmt.Errorf("remove finalizer: %s failed for %s", dbUserFinalizer, dbuser.Name)
+				log.Error(err, "Failed to remove finalizer for DBUser")
+				return ctrl.Result{Requeue: true}, nil
+			}
+
+			if err := r.Update(ctx, dbuser); err != nil {
+				log.Error(err, "Failed to remove finalizer for Database")
+				return ctrl.Result{}, err
+			}
+
+			// Once DBUserFinalizer is removed from DBUser
+			// Remove DBUserFinalizer from Database object
+
+			log.Info("Removing DBUser Finalizer from associated database after removing it from DBUser")
+			if ok := controllerutil.RemoveFinalizer(&database, dbUserFinalizer); !ok {
+				err := fmt.Errorf("remove finalizer: %s failed for %s", dbUserFinalizer, database.Name)
+				log.Error(err, "Failed to remove finalizer from Database")
+				return ctrl.Result{Requeue: true}, nil
+			}
+
+			if err := r.Update(ctx, &database); err != nil {
+				log.Error(err, "Failed to update the status of Database")
+				return ctrl.Result{}, err
+			}
+		}
+		return ctrl.Result{}, nil
 	}
 
 	// Set DBUserName
@@ -158,14 +218,13 @@ func (r *DBUserReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 	dbuser.Status.Permission = dbuser.Spec.Permission
 
 	// update the condition
-	meta.SetStatusCondition(&dbuser.Status.Conditions, metav1.Condition{Type: typeAvailableDBUser, Status: metav1.ConditionTrue, Reason: "Reconciling", Message: "user created"})
+	meta.SetStatusCondition(&dbuser.Status.Conditions, metav1.Condition{Type: typeAvailableDBUser, Status: metav1.ConditionTrue, Reason: "Reconciled", Message: "DBUser created"})
 
 	if err := r.Status().Update(ctx, dbuser); err != nil {
 		log.Error(err, "Failed to update DBUser status")
 		return ctrl.Result{}, err
 	}
 
-	// TODO: delete logic
 	// TODO: add IAM policy creation??? leave it to a separate IRSA creation workflow?
 
 	// postgres role management:
@@ -178,6 +237,11 @@ func (r *DBUserReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&postgresv1.DBUser{}).
 		Complete(r)
+}
+
+func (r *DBUserReconciler) doFinalizerOperationsForDBUser(dbuser *postgresv1.DBUser) {
+	// TODO:
+	// delete the user from Postgres
 }
 
 func databaseIsReady(database postgresv1.Database) bool {
