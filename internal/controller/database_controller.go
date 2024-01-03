@@ -255,6 +255,7 @@ func (r *DatabaseReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 func (r *DatabaseReconciler) doFinalizerOperationsForDatabase(database *postgresv1.Database) {
 	// TODO: remove database rw role
 	// TODO: remove database ro role
+	// TODO: delete database from Postgres server
 	// TODO: check rw user is deleted
 	// TODO: check ro user is deleted
 }
