@@ -5,7 +5,7 @@ This an operator to create databases and users on RDS Postgres. It is developed 
 * This is written using [Kubebuilder](https://github.com/kubernetes-sigs/kubebuilder)
 * Create databases on AWS Aurora Postgres instance
 * Configure ReadWrite and ReadOnly roles for the database
-* [WIP] Create users for the roles. These users can be used by an applicaion running on K8s container on AWS such as EKS.
+* Create users for the roles. These users can be used by an applicaion running on K8s container on AWS such as EKS.
 * The user is authenticated using IAM authentication for RDS. See [IAM Database Authentication](https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/UsingWithRDS.IAMDBAuth.html).
 * The container is recommended to use IRSA([IAM Roles for Service Accounts](https://docs.aws.amazon.com/eks/latest/userguide/iam-roles-for-service-accounts.html))
 
@@ -13,7 +13,7 @@ This an operator to create databases and users on RDS Postgres. It is developed 
 ## Assumption
 * This operator doesn't deploy Aurora Postgres instance.
 * It only create a database on the instance and configure Postgres roles that can be used by a app user.
-* [WIP] controller for creating app users will be added. 
+* controller for creating app users will be added. 
 * The instance has to be deployed separately. An infrastructure as code (IaC) using Cloud Formation or Terraform is recommended.
 
 
