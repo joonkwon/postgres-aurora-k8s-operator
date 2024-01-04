@@ -195,6 +195,7 @@ func (r *DBUserReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 	// Set DBUserName
 	var dbuserName string = strings.Replace(fmt.Sprintf("%s_%s", dbuser.Namespace, dbuser.Name), "-", "_", -1)
 	var roleName string
+	var dbname string = database.Status.DatabaseName
 	if dbuser.Spec.Permission == postgresv1.PermissionReadOnly {
 		roleName = database.Status.AppRoleRO
 	}
@@ -203,7 +204,7 @@ func (r *DBUserReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 	}
 
 	// Create DBUser
-	if err := r.Postgres.CreateUser(dbuserName, roleName); err != nil && !services.AlreadyExist(err) {
+	if err := r.Postgres.CreateUser(dbuserName, roleName, dbname); err != nil && !services.AlreadyExist(err) {
 		log.Error(err, "Unable to create user", "username", dbuserName, "role", roleName)
 		return ctrl.Result{}, err
 	}
@@ -242,6 +243,7 @@ func (r *DBUserReconciler) SetupWithManager(mgr ctrl.Manager) error {
 func (r *DBUserReconciler) doFinalizerOperationsForDBUser(dbuser *postgresv1.DBUser) {
 	// TODO:
 	// delete the user from Postgres
+	// if policy creation is implemented, delete the polciy too.
 }
 
 func databaseIsReady(database postgresv1.Database) bool {
