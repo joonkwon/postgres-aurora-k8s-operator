@@ -98,6 +98,7 @@ func (p *PostgresService) CreateDB(dbname string) error {
 	if err != nil {
 		return err
 	}
+	defer dbClient.Close()
 	if _, err := dbClient.Exec(statement); err != nil {
 		return err
 	}
@@ -124,6 +125,8 @@ func (p *PostgresService) CreateRole(dbname string, roleType RoleType) (rolename
 	if err != nil {
 		return "", err
 	}
+	defer dbClient.Close()
+
 	if _, err := dbClient.Exec(createStmt); err != nil && !AlreadyExist(err) {
 		return "", err
 	}
@@ -149,16 +152,13 @@ func (p *PostgresService) CreateRORole(dbname string) (roleName string, err erro
 	return p.CreateRole(dbname, ReadOnly)
 }
 
-func AlreadyExist(err error) bool {
-	return strings.Contains(err.Error(), "already exists")
-}
-
 // see https://www.postgresql.org/docs/12/sql-alterdefaultprivileges.html
 func (p *PostgresService) ConfigureDefaultPrivileges(dbname, roleRW, roleRO string) (err error) {
 	dbClient, err := p.getDBClient(dbname)
 	if err != nil {
 		return err
 	}
+	defer dbClient.Close()
 
 	stmtRWTpls := []string{
 		"ALTER DEFAULT PRIVILEGES FOR ROLE %s GRANT ALL ON TABLES TO %s",
@@ -214,6 +214,8 @@ func (p *PostgresService) CreateUser(username, roleName, dbname string) (err err
 	if err != nil {
 		return err
 	}
+	defer dbClient.Close()
+
 	createStmt := fmt.Sprintf("CREATE USER %s", username)
 	grantRoleStmt := fmt.Sprintf("GRANT %s TO %s", roleName, username)
 	grantIAMStmt := fmt.Sprintf("GRANT %s TO %s", IAM_AUTH_ROLE, username)
@@ -240,4 +242,32 @@ func (p *PostgresService) CreateUser(username, roleName, dbname string) (err err
 	}
 
 	return nil
+}
+
+func (p *PostgresService) DeleteRole(roleName string) (err error) {
+	dbClient, err := p.GetMgmtDBClient()
+	if err != nil {
+		return err
+	}
+	defer dbClient.Close()
+
+	removeRoleStmt := fmt.Sprintf("DROP ROLE IF EXISTS %s", roleName)
+	_, err = dbClient.Exec(removeRoleStmt)
+	return
+}
+
+func (p *PostgresService) DeleteDatabase(dbname string) (err error) {
+	dbClient, err := p.GetMgmtDBClient()
+	if err != nil {
+		return err
+	}
+	defer dbClient.Close()
+
+	removeRoleStmt := fmt.Sprintf("DROP ROLE IF EXISTS %s", dbname)
+	_, err = dbClient.Exec(removeRoleStmt)
+	return
+}
+
+func AlreadyExist(err error) bool {
+	return strings.Contains(err.Error(), "already exists")
 }

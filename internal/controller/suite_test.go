@@ -61,6 +61,7 @@ var psDocker postgresDockerConfig = postgresDockerConfig{
 	image:            "postgres:15.5",
 	postgresPassword: "supersecretpassword",
 }
+var postgres *services.PostgresService
 
 type postgresDockerConfig struct {
 	image            string
@@ -123,7 +124,7 @@ var _ = BeforeSuite(func() {
 		Pass: psDocker.postgresPassword,
 	}
 
-	postgres := services.PostgresService{
+	postgres = &services.PostgresService{
 		Host:           "127.0.0.1",
 		MasterUsername: "postgres",
 		Port:           postgresPort,
@@ -139,14 +140,14 @@ var _ = BeforeSuite(func() {
 	err = (&DatabaseReconciler{
 		Client:   k8sManager.GetClient(),
 		Scheme:   k8sManager.GetScheme(),
-		Postgres: &postgres,
+		Postgres: postgres,
 	}).SetupWithManager(k8sManager)
 	Expect(err).ToNot(HaveOccurred())
 
 	err = (&DBUserReconciler{
 		Client:   k8sManager.GetClient(),
 		Scheme:   k8sManager.GetScheme(),
-		Postgres: &postgres,
+		Postgres: postgres,
 	}).SetupWithManager(k8sManager)
 	Expect(err).ToNot(HaveOccurred())
 
@@ -186,7 +187,7 @@ var _ = AfterSuite(func() {
 	*/
 })
 
-func setUpRDSIAMRole(p services.PostgresService) (err error) {
+func setUpRDSIAMRole(p *services.PostgresService) (err error) {
 	sql, err := p.GetMgmtDBClient()
 	if err != nil {
 		return

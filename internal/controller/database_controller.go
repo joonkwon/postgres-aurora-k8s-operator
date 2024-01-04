@@ -131,7 +131,10 @@ func (r *DatabaseReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 
 			// Perform all operations required before remove the finalizer and allow
 			// the Kubernetes API to remove the custom resource.
-			r.doFinalizerOperationsForDatabase(database)
+			if err := r.doFinalizerOperationsForDatabase(database); err != nil {
+				log.Error(err, "Failed to update database status after finalizer operation")
+				return ctrl.Result{}, err
+			}
 
 			// TODO(user): If you add operations to the doFinalizerOperationsFordatabase method
 			// then you need to ensure that all worked fine before deleting and updating the Downgrade status
@@ -252,12 +255,21 @@ func (r *DatabaseReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	return ctrl.Result{}, nil
 }
 
-func (r *DatabaseReconciler) doFinalizerOperationsForDatabase(database *postgresv1.Database) {
-	// TODO: remove database rw role
-	// TODO: remove database ro role
-	// TODO: delete database from Postgres server
-	// TODO: check rw user is deleted
-	// TODO: check ro user is deleted
+func (r *DatabaseReconciler) doFinalizerOperationsForDatabase(database *postgresv1.Database) (err error) {
+	// TODO: make a backup on RDS Postgres
+	if err = r.Postgres.DeleteRole(database.Status.AppRoleRO); err != nil {
+		return
+	}
+	if err = r.Postgres.DeleteRole(database.Status.AppRoleRW); err != nil {
+		return
+	}
+	if err = r.Postgres.DeleteDatabase(database.Status.DatabaseName); err != nil {
+		return
+	}
+	database.Status.AppRoleRO = ""
+	database.Status.AppRoleRW = ""
+	database.Status.DatabaseName = ""
+	return
 }
 
 // SetupWithManager sets up the controller with the Manager.
