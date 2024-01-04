@@ -106,7 +106,7 @@ func (p *PostgresService) CreateDB(dbname string) error {
 
 // see https://www.postgresql.org/docs/12/ddl-priv.html &
 // https://www.postgresql.org/docs/12/sql-grant.html
-func (p *PostgresService) createRole(dbname string, roleType RoleType) (rolename string, err error) {
+func (p *PostgresService) CreateRole(dbname string, roleType RoleType) (rolename string, err error) {
 	var roleName string
 	var grant string
 	if roleType == ReadOnly {
@@ -142,11 +142,11 @@ func (p *PostgresService) createRole(dbname string, roleType RoleType) (rolename
 }
 
 func (p *PostgresService) CreateRWRole(dbname string) (roleName string, err error) {
-	return p.createRole(dbname, ReadWrite)
+	return p.CreateRole(dbname, ReadWrite)
 }
 
 func (p *PostgresService) CreateRORole(dbname string) (roleName string, err error) {
-	return p.createRole(dbname, ReadOnly)
+	return p.CreateRole(dbname, ReadOnly)
 }
 
 func AlreadyExist(err error) bool {
@@ -209,7 +209,7 @@ func (p *PostgresService) ConfigureDefaultPrivileges(dbname, roleRW, roleRO stri
 	return nil
 }
 
-func (p *PostgresService) CreateUser(username, roleName string) (err error) {
+func (p *PostgresService) CreateUser(username, roleName, dbname string) (err error) {
 	dbClient, err := p.GetMgmtDBClient()
 	if err != nil {
 		return err
@@ -217,7 +217,7 @@ func (p *PostgresService) CreateUser(username, roleName string) (err error) {
 	createStmt := fmt.Sprintf("CREATE USER %s", username)
 	grantRoleStmt := fmt.Sprintf("GRANT %s TO %s", roleName, username)
 	grantIAMStmt := fmt.Sprintf("GRANT %s TO %s", IAM_AUTH_ROLE, username)
-	alterRoleStmt := fmt.Sprintf("ALTER ROLE %s SET ROLE %s", username, roleName)
+	alterRoleStmt := fmt.Sprintf("ALTER ROLE %s IN DATABASE %s SET ROLE %s", username, dbname, roleName)
 
 	_, err = dbClient.Exec(createStmt)
 	if err != nil {
