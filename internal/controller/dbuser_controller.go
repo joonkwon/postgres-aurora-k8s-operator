@@ -145,13 +145,13 @@ func (r *DBUserReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 				return ctrl.Result{}, err
 			}
 
-			r.doFinalizerOperationsForDBUser(dbuser)
-
 			// re-fetch dbuser
 			if err := r.Get(ctx, req.NamespacedName, dbuser); err != nil {
 				log.Error(err, "Failed to re-fetch DBUser")
 				return ctrl.Result{}, err
 			}
+
+			r.doFinalizerOperationsForDBUser(dbuser)
 
 			meta.SetStatusCondition(&dbuser.Status.Conditions, metav1.Condition{Type: typeDegradedDBUser,
 				Status: metav1.ConditionUnknown, Reason: "Finalizing",
@@ -159,6 +159,19 @@ func (r *DBUserReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 
 			if err := r.Status().Update(ctx, dbuser); err != nil {
 				log.Error(err, "Failed to update DBUser status")
+				return ctrl.Result{}, err
+			}
+
+			// Remove DBUserFinalizer from Database object
+			log.Info("Removing DBUser Finalizer from associated database")
+			if ok := controllerutil.RemoveFinalizer(&database, dbUserFinalizer); !ok {
+				err := fmt.Errorf("remove finalizer: %s failed for %s", dbUserFinalizer, database.Name)
+				log.Error(err, "Failed to remove finalizer from Database")
+				return ctrl.Result{Requeue: true}, nil
+			}
+
+			if err := r.Update(ctx, &database); err != nil {
+				log.Error(err, "Failed to update the status of Database")
 				return ctrl.Result{}, err
 			}
 
@@ -171,21 +184,6 @@ func (r *DBUserReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 
 			if err := r.Update(ctx, dbuser); err != nil {
 				log.Error(err, "Failed to remove finalizer for Database")
-				return ctrl.Result{}, err
-			}
-
-			// Once DBUserFinalizer is removed from DBUser
-			// Remove DBUserFinalizer from Database object
-
-			log.Info("Removing DBUser Finalizer from associated database after removing it from DBUser")
-			if ok := controllerutil.RemoveFinalizer(&database, dbUserFinalizer); !ok {
-				err := fmt.Errorf("remove finalizer: %s failed for %s", dbUserFinalizer, database.Name)
-				log.Error(err, "Failed to remove finalizer from Database")
-				return ctrl.Result{Requeue: true}, nil
-			}
-
-			if err := r.Update(ctx, &database); err != nil {
-				log.Error(err, "Failed to update the status of Database")
 				return ctrl.Result{}, err
 			}
 		}
@@ -240,9 +238,13 @@ func (r *DBUserReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Complete(r)
 }
 
-func (r *DBUserReconciler) doFinalizerOperationsForDBUser(dbuser *postgresv1.DBUser) {
+func (r *DBUserReconciler) doFinalizerOperationsForDBUser(dbuser *postgresv1.DBUser) (err error) {
+	if err = r.Postgres.DeleteRole(dbuser.Status.UserName); err != nil {
+		return
+	}
+	dbuser.Status.UserName = ""
+	return nil
 	// TODO:
-	// delete the user from Postgres
 	// if policy creation is implemented, delete the polciy too.
 }
 
