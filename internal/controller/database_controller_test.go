@@ -46,7 +46,7 @@ var _ = Describe("Database controller create and delete", Ordered, func() {
 				var err error
 				// wait for a while for the object is created
 				for i := 1; i < 10; i++ {
-					err := k8sClient.Get(ctx, types.NamespacedName{
+					err = k8sClient.Get(ctx, types.NamespacedName{
 						Namespace: DatabaseNamespace,
 						Name:      DatabaseName,
 					}, database)
