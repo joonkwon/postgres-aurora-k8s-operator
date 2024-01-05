@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	_ "github.com/lib/pq"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
@@ -12,6 +13,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 
 	postgresv1 "postgres-aurora-db-user/api/v1"
+	"postgres-aurora-db-user/internal/services"
 )
 
 var _ = Describe("Database controller create and delete", Ordered, func() {
@@ -58,7 +60,56 @@ var _ = Describe("Database controller create and delete", Ordered, func() {
 			Expect(database.Status).To(HaveField("DatabaseName", "default_test_db"))
 			Expect(database.Status).To(HaveField("AppRoleRW", "default_test_db_role_rw"))
 			Expect(database.Status).To(HaveField("AppRoleRO", "default_test_db_role_ro"))
+			Expect(databaseExist(postgres, database.Status.DatabaseName)).To(BeTrue())
+			var nonExistingDB = "not_there"
+			Expect(databaseExist(postgres, nonExistingDB)).Error().Should(MatchError("sql: no rows in result set"))
+			Expect(roleExist(postgres, database.Status.AppRoleRO)).To(BeTrue())
+			Expect(roleExist(postgres, database.Status.AppRoleRW)).To(BeTrue())
+			var nonExistingRole = "non_role"
+			Expect(roleExist(postgres, nonExistingRole)).Error().Should(MatchError("sql: no rows in result set"))
 		})
 
 	})
 })
+
+// const (
+// 	PSObjectTypeDatabase = "database"
+// 	PSObjectTypeRole = "role"
+// )
+// type PSObjectType string
+
+func databaseExist(p *services.PostgresService, dbname string) (bool, error) {
+	dbClient, err := p.GetMgmtDBClient()
+	if err != nil {
+		return false, err
+	}
+	stmt := "SELECT datname FROM pg_catalog.pg_database WHERE datname=$1"
+	row := dbClient.QueryRow(stmt, dbname)
+	if row.Err() != nil {
+		return false, err
+	}
+	var dbnameRet string
+	err = row.Scan(&dbnameRet)
+	if err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+func roleExist(p *services.PostgresService, roleName string) (bool, error) {
+	dbClient, err := p.GetMgmtDBClient()
+	if err != nil {
+		return false, err
+	}
+	stmt := "SELECT rolname FROM pg_catalog.pg_roles WHERE rolname=$1"
+	row := dbClient.QueryRow(stmt, roleName)
+	if row.Err() != nil {
+		return false, err
+	}
+	var roleNameRet string
+	err = row.Scan(&roleNameRet)
+	if err != nil {
+		return false, err
+	}
+	return true, nil
+}
