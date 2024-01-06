@@ -9,6 +9,7 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -20,15 +21,14 @@ import (
 var _ = Context("When updating DBUser Status", Ordered, func() {
 	// Define utility constants for object names and testing timeouts/durations and intervals.
 	var (
-		DBUser                                   = "testuser"
+		DBUser                                   = "mytestuser"
 		Namespace                                = "default"
-		DatabaseObjectName                       = "myapp-db"
+		DatabaseObjectName                       = "myapp-db2"
 		Permission         postgresv1.Permission = "ReadWrite"
-		database                                 = &postgresv1.Database{}
 	)
 
 	BeforeAll(func() {
-		database = &postgresv1.Database{
+		database := &postgresv1.Database{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      DatabaseObjectName,
 				Namespace: Namespace,
@@ -36,6 +36,7 @@ var _ = Context("When updating DBUser Status", Ordered, func() {
 		}
 		ctx := context.Background()
 		Expect(k8sClient.Create(ctx, database)).Should(Succeed())
+		database = &postgresv1.Database{}
 		Expect(getDatabaseObject(Namespace, DatabaseObjectName, database)).Should(Succeed())
 	})
 
@@ -56,6 +57,7 @@ var _ = Context("When updating DBUser Status", Ordered, func() {
 				},
 			}
 			Expect(k8sClient.Create(ctx, dbuser)).Should(Succeed())
+			dbuserRet := &postgresv1.DBUser{}
 			Expect(func() error {
 				var err error
 				// wait up to 40 seconds
@@ -63,8 +65,8 @@ var _ = Context("When updating DBUser Status", Ordered, func() {
 					err := k8sClient.Get(ctx, types.NamespacedName{
 						Namespace: dbuser.Namespace,
 						Name:      dbuser.Name,
-					}, dbuser)
-					if err == nil && dbuser.Status.UserName != "" && dbuser.Status.Database != "" {
+					}, dbuserRet)
+					if err == nil && dbuserRet.Status.UserName != "" && dbuserRet.Status.Database != "" {
 						return nil
 					}
 					time.Sleep(time.Duration(2*i) * time.Second)
@@ -72,12 +74,15 @@ var _ = Context("When updating DBUser Status", Ordered, func() {
 				return fmt.Errorf("timed out whith err: %s", err)
 			}()).Should(Succeed())
 
-			Expect(dbuser.Status).To(HaveField("UserName",
+			Expect(dbuserRet.Status).To(HaveField("UserName",
 				strings.Replace(fmt.Sprintf("%s_%s", dbuser.Namespace, dbuser.Name), "-", "_", -1)))
-			Expect(dbuser.Status).To(HaveField("Database", database.Status.DatabaseName))
+			var database = &postgresv1.Database{}
+			Expect(getDatabaseObject(dbuserRet.Spec.Database.Namespace, dbuserRet.Spec.Database.Name, database)).Should(Succeed())
+			Expect(dbuserRet.Status).To(HaveField("Database", database.Status.DatabaseName))
 		})
 
 		It("Should configure finalizer on Database object", func() {
+			database := &postgresv1.Database{}
 			Expect(getDatabaseObject(Namespace, DatabaseObjectName, database)).Should(Succeed())
 			Expect(controllerutil.ContainsFinalizer(database, dbUserFinalizer)).To(BeTrue())
 		})
@@ -113,13 +118,46 @@ var _ = Context("When updating DBUser Status", Ordered, func() {
 			}()).Should(MatchError(ContainSubstring("not found")))
 		})
 
-		It("Should remove DBuser finalizer form Database", func() {
+		It("Should remove DBuser finalizer from Database", func() {
+			var database = &postgresv1.Database{}
 			Expect(getDatabaseObject(Namespace, DatabaseObjectName, database)).Should(Succeed())
-			Expect(controllerutil.ContainsFinalizer(database, dbUserFinalizer)).ShouldNot(BeTrue())
+			// sometime we have to wait enough until the status on K8s control plane get fully updated
+			timeout := 240
+			Expect(eventually(controllerutil.ContainsFinalizer, timeout, database, dbUserFinalizer)).ShouldNot(BeTrue())
 		})
 	})
 
 })
+
+type finalizerCheck func(client.Object, string) bool
+
+// eventually wait a certain amount time until a function get the desirable outcome
+func eventually(fn finalizerCheck, timeout int, o client.Object, finalizer string) bool {
+	ctxTimeout, cancel := context.WithTimeout(context.Background(), time.Duration(timeout)*time.Second)
+	defer cancel()
+	out := make(chan bool, 1)
+	// retry every second until get true value or time out
+	go func(ch chan<- bool, o client.Object, finalizer string) {
+		for {
+			k8sClient.Get(ctxTimeout, types.NamespacedName{
+				Namespace: o.GetNamespace(),
+				Name:      o.GetName(),
+			}, o)
+			ok := fn(o, finalizer)
+			if ok == false {
+				out <- false
+				break
+			}
+			time.Sleep(time.Second)
+		}
+	}(out, o, finalizer)
+	select {
+	case <-ctxTimeout.Done():
+		return true
+	case result := <-out:
+		return result
+	}
+}
 
 func getDatabaseObject(namespace, name string, database *postgresv1.Database) error {
 	var err error
